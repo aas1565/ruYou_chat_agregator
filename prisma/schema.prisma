@@ -1,0 +1,232 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  passwordHash  String
+  role          String   @default("EMPLOYEE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  sessions      Session[]
+  assignedLeads Lead[]              @relation("LeadAssignee")
+  notes         ManagerNote[]
+  messages      Message[]
+  statusChanges LeadStatusHistory[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Client {
+  id             String   @id @default(cuid())
+  firstName      String
+  lastName       String?
+  phone          String?
+  email          String?
+  telegram       String?
+  whatsapp       String?
+  vk             String?
+  firstChannel   String
+  firstContactAt DateTime
+  lastContactAt  DateTime
+  contactCount   Int      @default(1)
+  status         String   @default("ACTIVE")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  contacts       ClientContact[]
+  identities     ChannelIdentity[]
+  conversations  Conversation[]
+  leads          Lead[]
+  notes          ManagerNote[]
+
+  @@index([lastContactAt])
+  @@index([status])
+}
+
+model ClientContact {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  type      String
+  value     String
+  createdAt DateTime @default(now())
+
+  @@unique([type, value])
+  @@index([value])
+  @@index([clientId])
+}
+
+model ChannelIdentity {
+  id          String   @id @default(cuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  channel     String
+  externalId  String
+  displayName String?
+  createdAt   DateTime @default(now())
+
+  @@unique([channel, externalId])
+  @@index([clientId])
+}
+
+model Conversation {
+  id              String    @id @default(cuid())
+  clientId        String
+  client          Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  channel         String
+  status          String    @default("OPEN")
+  handlerType     String    @default("AI")
+  unreadCount     Int       @default(0)
+  lastMessageAt   DateTime
+  lastMessageText String    @default("")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  messages        Message[]
+  leads           Lead[]
+
+  @@index([clientId])
+  @@index([lastMessageAt])
+  @@index([channel])
+  @@index([status])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderType     String
+  senderUserId   String?
+  senderUser     User?        @relation(fields: [senderUserId], references: [id])
+  text           String
+  channel        String
+  deliveryStatus String       @default("SENT")
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model Lead {
+  id             String              @id @default(cuid())
+  shortId        Int                 @unique
+  clientId       String
+  client         Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  conversationId String?
+  conversation   Conversation?       @relation(fields: [conversationId], references: [id])
+  funnel         String              @default("SERVICE")
+  status         String              @default("NEW")
+  title          String
+  assigneeId     String?
+  assignee       User?               @relation("LeadAssignee", fields: [assigneeId], references: [id])
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  statusHistory  LeadStatusHistory[]
+  notes          ManagerNote[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model LeadStatusHistory {
+  id          String   @id @default(cuid())
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  fromStatus  String?
+  toStatus    String
+  changedById String?
+  changedBy   User?    @relation(fields: [changedById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([leadId, createdAt])
+}
+
+model ManagerNote {
+  id        String   @id @default(cuid())
+  clientId  String?
+  client    Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  leadId    String?
+  lead      Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  text      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([leadId])
+}
+
+model KnowledgeEntry {
+  id        String   @id @default(cuid())
+  type      String
+  title     String
+  content   String
+  metadata  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([isActive])
+}
+
+model KnowledgeSource {
+  id               String           @id @default(cuid())
+  type             String
+  name             String
+  originalFileName String?
+  url              String?
+  status           String           @default("PROCESSING")
+  errorMessage     String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  chunks           KnowledgeChunk[]
+
+  @@index([status])
+  @@index([type])
+}
+
+model KnowledgeChunk {
+  id        String          @id @default(cuid())
+  sourceId  String
+  source    KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  content   String
+  position  Int
+  createdAt DateTime        @default(now())
+
+  @@index([sourceId])
+}
+
+model AiResponseLog {
+  id                String   @id @default(cuid())
+  conversationId    String
+  clientMessageId   String
+  aiMessageId       String?
+  model             String?
+  canAnswer         Boolean?
+  latencyMs         Int?
+  knowledgeEntryIds String?
+  knowledgeChunkIds String?
+  sourceIds         String?
+  error             String?
+  createdAt         DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([createdAt])
+}
